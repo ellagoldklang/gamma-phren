@@ -1,6 +1,8 @@
 from neuron import h
 from neuron.units import ms, mV
 h.load_file('stdrun.hoc')
+import random
+import numpy as np
 
 class Cell():
     def __init__(self):
@@ -109,60 +111,89 @@ class inhibitory_neuron(Cell):
 
     #IMPORTANT - add some noise into the system 
     #add more dendrites onto the soma? - figure out later
-    # you probably have to edit the biophysics values soon, they look way to off - check later !!
+    # you probably have to edit the biophysics values soon, they look way to off - check later !!\
+
+number = 2  # number of pairs
+c4 = 5  # concentration of c4 protein
+n = 
+
+# simulating the amount of pairs (n)
 
 # Instantiate both neurons
-e_cell = Excitatory_neuron()
-i_cell = inhibitory_neuron()
+e_cell = [Excitatory_neuron() for _ in range(n)]
+i_cell = [inhibitory_neuron() for _ in range(n)]
 
 # connection from excitatory to inhibiton
-e_to_i = h.NetCon(e_cell.soma(0.5)._ref_v, i_cell.syn, sec=e_cell.soma)
-e_to_i.threshold = 0 # in mV, the threshold for the connection to trigger 
-e_to_i.delay = 5    # in ms
-e_to_i.weight[0] = 0.25  # in μS, the amount of current given to inhibition # make sure to convert this to a for loop if you decide to add multiple neurons 
-e_cell.syn.tau = 3 * ms  
+e_to_i = []
+i_to_e = []
+
+for i in range(n):
+    # excitatory to inhibitory
+    nc_ei = h.NetCon(e_cell[i].soma(0.5)._ref_v, i_cell[i].syn, sec=e_cell[i].soma)
+    nc_ei.threshold = 0 # in mV, the threshold for the connection to trigger 
+    nc_ei.delay = random.normalvariate(2, 5)    # in ms
+    nc_ei.weight[0] = 0.25  # in μS, the amount of current given to inhibition # make sure to convert this to a for loop if you decide to add multiple neurons 
+    e_cell[i].syn.tau = 3 * ms  
+    e_to_i.append(nc_ei)
+
+    # inhibitory to excitatory
+    e_cell[i].inh_syn = h.ExpSyn(e_cell[i].soma(0.5))
+    e_cell[i].inh_syn.tau = 9 * ms
+    e_cell[i].inh_syn.e = -75      # inhibitory reversal potential in mV
+    nc_ie = h.NetCon(i_cell[i].soma(0.5)._ref_v, e_cell[i].inh_syn, sec=i_cell[i].soma)
+    nc_ie.threshold = 0        # mV, spike detection threshold for inhibitory neuron
+    nc_ie.delay = random.normalvariate(7, 12)            # ms, can adjust as needed
+    nc_ie.weight[0] = 0.25     # μS, synaptic strength (experiment with values 0.01 - 0.1)
+    i_to_e.append(nc_ie)
+
+# adding noise into the neuron
+# comments about noise: 1] only 1 neuron gets the noise, 2] the excitatory neuron does not recieve the noise 
+
+dt = 0.1 # in ms
+time = 100 # in ms
+nt = int(time / dt)
+t_points = np.arange(0, time, dt)
+
+baseline = 0.5 # in nA
+noise_strength = 0.1 # in nA
+e_noise = []
+i_noise = []
 
 
-# connection from inhibition to excitatory
-e_cell.inh_syn = h.ExpSyn(e_cell.soma(0.5))
-e_cell.inh_syn.tau = 9 * ms
-e_cell.inh_syn.e = -75      # inhibitory reversal potential in mV
 
-
-i_to_e = h.NetCon(i_cell.soma(0.5)._ref_v, e_cell.inh_syn, sec=i_cell.soma)
-i_to_e.threshold = 0        # mV, spike detection threshold for inhibitory neuron
-i_to_e.delay = 5            # ms, can adjust as needed
-i_to_e.weight[0] = 0.25     # μS, synaptic strength (experiment with values 0.01 - 0.1)
-
+for i in range(n):
+    # noise for excitatory cell
+    stim = h.IClamp(e_cell[i].soma(0.5))
+    stim.delay = 0
+    stim.dur = time  # Always on
+    noise_and_baseline = 0.5 + np.random.normal(0, noise_strength, nt)
+    noise_vec = h.Vector(noise_and_baseline)
+    noise_vec.play(stim._ref_amp, dt)
+    e_noise.append(stim)
 
 
 #testing code section
 
 
 import matplotlib.pyplot as plt
-import numpy as np
 
-# 4. Inject current into excitatory neuron only
-e_stim = h.IClamp(e_cell.soma(0.5))
-e_stim.delay = 10         # ms
-e_stim.dur = 100         # ms (long enough for a few spikes)
-e_stim.amp = 1.5         # nA (adjust for repetitive spiking)
 
-# No current to inhibitory neuron
 
 # 5. Record voltages and time
 t_vec = h.Vector().record(h._ref_t)
-v_e = h.Vector().record(e_cell.soma(0.5)._ref_v)
-v_i = h.Vector().record(i_cell.soma(0.5)._ref_v)
+v_e = [h.Vector().record(cell.soma(0.5)._ref_v) for cell in e_cell]
+v_i = [h.Vector().record(cell.soma(0.5)._ref_v) for cell in i_cell]
+
 
 # 6. Run simulation (e.g., 200 ms)
 h.finitialize(-65)
-h.continuerun(100)
+h.continuerun(time)
 
 # 7. Plot both neuron voltages
 plt.figure(figsize=(10,5))
-plt.plot(t_vec, v_e, label="Excitatory neuron (soma)", color='C0')
-plt.plot(t_vec, v_i, label="Inhibitory neuron (soma)", color='C1')
+for i in range(n):
+    plt.plot(t_vec, v_e[i], alpha=0.6, label=f"E{i}")
+    plt.plot(t_vec, v_i[i], alpha=0.6, label=f"I{i}")
 plt.xlabel("Time (ms)")
 plt.ylabel("Membrane Potential (mV)")
 plt.title("PING Test: E→I and I→E Connections")
