@@ -3,6 +3,9 @@ from neuron.units import ms, mV
 h.load_file('stdrun.hoc')
 import random
 import numpy as np
+import math
+from fractions import Fraction
+import matplotlib.pyplot as plt
 
 class Cell():
     def __init__(self):
@@ -113,9 +116,12 @@ class inhibitory_neuron(Cell):
     #add more dendrites onto the soma? - figure out later
     # you probably have to edit the biophysics values soon, they look way to off - check later !!\
 
-number = 2  # number of pairs
+# repeating_5 = Fraction(-1, 18)
+n = 400 # number of pairs
 c4 = 5  # concentration of c4 protein
-n = 
+
+# n = int(round(((100) / (1 + (math.e ** (float(repeating_5) * (c4 - 0.5))))) * number))
+
 
 # simulating the amount of pairs (n)
 
@@ -150,7 +156,7 @@ for i in range(n):
 # comments about noise: 1] only 1 neuron gets the noise, 2] the excitatory neuron does not recieve the noise 
 
 dt = 0.1 # in ms
-time = 100 # in ms
+time = 1000 # in ms
 nt = int(time / dt)
 t_points = np.arange(0, time, dt)
 
@@ -162,32 +168,58 @@ i_noise = []
 
 
 for i in range(n):
-    # noise for excitatory cell
+    # fix the noise stuff later 
     stim = h.IClamp(e_cell[i].soma(0.5))
     stim.delay = 0
     stim.dur = time  # Always on
-    noise_and_baseline = 0.5 + np.random.normal(0, noise_strength, nt)
-    noise_vec = h.Vector(noise_and_baseline)
-    noise_vec.play(stim._ref_amp, dt)
+    stim.amp = 0.5
     e_noise.append(stim)
 
 
-#testing code section
+#LFP section
 
-
-import matplotlib.pyplot as plt
-
-
-
-# 5. Record voltages and time
+# 1. Record synaptic currents (this part is good)
 t_vec = h.Vector().record(h._ref_t)
 v_e = [h.Vector().record(cell.soma(0.5)._ref_v) for cell in e_cell]
 v_i = [h.Vector().record(cell.soma(0.5)._ref_v) for cell in i_cell]
 
 
-# 6. Run simulation (e.g., 200 ms)
+# 2. Run the simulation
 h.finitialize(-65)
 h.continuerun(time)
+
+# Convert recorded vectors to numpy arrays for easier handling
+v_e_mat = np.array([np.array(vec) for vec in v_e])
+v_i_mat = np.array([np.array(vec) for vec in v_i])
+
+# LFP = mean across all excitatory (and optionally, inhibitory) neurons at each time point
+# This is the "network LFP"
+v_e_mat = np.array([np.array(vec) for vec in v_e])
+lfp = np.mean(v_e_mat, axis=0)
+
+# Plot LFP
+plt.figure(figsize=(10,4))
+plt.plot(t_vec, lfp, color='black', linewidth=2)
+plt.xlabel('Time (ms)')
+plt.ylabel('Simulated LFP (a.u.)')
+plt.title('LFP (Mean of Excitatory Soma Voltages)')
+plt.tight_layout()
+plt.show()
+
+
+#testing code section
+
+
+
+
+# # 5. Record voltages and time
+
+# h.finitialize(-65)
+# h.continuerun(time)
+
+
+
+# 6. Run simulation (e.g., 200 ms)
 
 # 7. Plot both neuron voltages
 plt.figure(figsize=(10,5))
