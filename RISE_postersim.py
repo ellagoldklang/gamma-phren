@@ -123,13 +123,8 @@ def remove_synapse(conn_list, percent):
     remove_indices = set(random.sample(range(len(conn_list)), n_remove))
     return [conn for idx, conn in enumerate(conn_list) if idx not in remove_indices]
 
-def positive_delay(mean, std, dt):
-    d = random.normalvariate(mean, std)
-    return max(dt, abs(d))
-
-
 n = 500 # number of pairs
-c4 = 100  # concentration of c4 protein in mg/dL
+c4 = 45  # concentration of c4 protein in mg/dL
 
 
 # n = round(sigmoid * number)
@@ -175,8 +170,6 @@ for i in range(n):
         nc_ie.delay = random.normalvariate(9.5, 0.97)            # ms, can adjust as needed
         nc_ie.weight[0] = 0.25     # μS, synaptic strength (experiment with values 0.01 - 0.1)
         i_to_e.append(nc_ie)
-
-delay = max(dt, random.normalvariate(2, 5))
 
 # excitatory to excitatory 
 e_to_e = []
@@ -241,8 +234,8 @@ for i in range(n):
 
 # #LFP section
 
-skip_samples = int(50 / dt)
 
+# #LFP section
 
 # 1. Record synaptic currents (this part is good)
 t_vec = h.Vector().record(h._ref_t)
@@ -254,50 +247,50 @@ v_i = [h.Vector().record(cell.soma(0.5)._ref_v) for cell in i_cell]
 h.finitialize(-65)
 h.continuerun(time)
 
-# Convert NEURON t_vec to numpy for slicing
-t_vec_np = np.array(t_vec)
-t_vec_valid = t_vec_np[skip_samples:]
-
 # Convert recorded vectors to numpy arrays for easier handling
 v_e_mat = np.array([np.array(vec) for vec in v_e])
 v_i_mat = np.array([np.array(vec) for vec in v_i])
 
 # LFP = mean across all excitatory (and optionally, inhibitory) neurons at each time point
+# This is the "network LFP"
 v_e_mat = np.array([np.array(vec) for vec in v_e])
 lfp = np.mean(v_e_mat, axis=0)
-lfp_valid = lfp[skip_samples:]
 
 # Plot LFP
 plt.figure(figsize=(10,4))
-plt.plot(t_vec_valid, lfp_valid, color='black', linewidth=2)
+plt.plot(t_vec, lfp, color='black', linewidth=2)
 plt.xlabel('Time (ms)')
 plt.ylabel('Simulated LFP (mV)')
 plt.title('LFP (Mean of Excitatory Soma Voltages)')
 plt.tight_layout()
 plt.show()
 
-# --- FOURIER TRANSFORM OF THE LFP ---
 
-# 1. Remove any DC offset (optional but typical)
-lfp_valid_detrended = lfp_valid - np.mean(lfp_valid)
+# # --- FOURIER TRANSFORM OF THE LFP (after 50 ms) ---
 
-# 2. Compute the FFT
-lfp_fft = np.fft.fft(lfp_valid_detrended)
-freqs = np.fft.fftfreq(len(lfp_valid), d=dt/1000)
+# # 1. Remove any DC offset (recommended)
+# lfp_valid_detrended = lfp_valid - np.mean(lfp_valid)
 
-# 3. Take only the positive frequencies
-pos_mask = freqs > 0
-lfp_fft_pos = np.abs(lfp_fft[pos_mask])
-freqs_pos = freqs[pos_mask]
+# # 2. Compute the FFT
+# lfp_fft = np.fft.fft(lfp_valid_detrended)
+# freqs = np.fft.fftfreq(len(lfp_valid), d=dt/1000)  # dt in ms, so divide by 1000 for seconds
 
-# 4. Plot the power spectrum
-plt.figure(figsize=(10,4))
-plt.plot(freqs_pos, lfp_fft_pos, color='purple')
-plt.xlabel('Frequency (Hz)')
-plt.ylabel('Amplitude (a.u.)')
-plt.title('LFP Power Spectrum (Fourier Transform)')
-plt.tight_layout()
-plt.show()
+# # 3. Only use positive frequencies (one-sided spectrum)
+# pos_mask = freqs > 0
+# freqs_pos = freqs[pos_mask]
+# lfp_fft_pos = np.abs(lfp_fft[pos_mask])
+
+# # 4. Plot the power spectrum
+# plt.figure(figsize=(10,4))
+# plt.plot(freqs_pos, lfp_fft_pos, color='purple')
+# plt.ylim(0, 100)
+# plt.xlabel('Frequency (Hz)')
+# plt.ylabel('Amplitude (a.u.)')
+# plt.title('LFP Power Spectrum (Fourier Transform, after 50 ms)')
+# plt.tight_layout()
+# plt.show()
+
+
 
 
 #testing code section
