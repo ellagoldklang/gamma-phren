@@ -256,13 +256,13 @@ v_e_mat = np.array([np.array(vec) for vec in v_e])
 lfp = np.mean(v_e_mat, axis=0)
 
 # Plot LFP
-plt.figure(figsize=(10,4))
-plt.plot(t_vec, lfp, color='black', linewidth=2)
-plt.xlabel('Time (ms)')
-plt.ylabel('Simulated LFP (mV)')
-plt.title('LFP (Mean of Excitatory Soma Voltages)')
-plt.tight_layout()
-plt.show()
+# plt.figure(figsize=(10,4))
+# plt.plot(t_vec, lfp, color='black', linewidth=2)
+# plt.xlabel('Time (ms)')
+# plt.ylabel('Simulated LFP (mV)')
+# plt.title('LFP (Mean of Excitatory Soma Voltages)')
+# plt.tight_layout()
+# plt.show()
 
 # --- Fourier/Powerspectrum Analysis of Simulated LFP ---
 
@@ -284,75 +284,151 @@ freqs_pos = freqs[pos_mask]
 power = np.square(np.abs(lfp_fft[pos_mask]))
 
 # 5. Plot the Power Spectrum (focus on 0–100 Hz)
-plt.figure(figsize=(10,4))
-plt.plot(freqs_pos, power, color='purple')
-plt.xlim(0, 100)  # adjust if you want to see a different range
-plt.xlabel('Frequency (Hz)')
-plt.ylabel('Power (a.u.)')
-plt.title('LFP Power Spectrum (Fourier Analysis)')
-plt.tight_layout()
-plt.show()
+# plt.figure(figsize=(10,4))
+# plt.plot(freqs_pos, power, color='purple')
+# plt.xlim(0, 100)  # adjust if you want to see a different range
+# plt.xlabel('Frequency (Hz)')
+# plt.ylabel('Power (a.u.)')
+# plt.title('LFP Power Spectrum (Fourier Analysis)')
+# plt.tight_layout()
+# plt.show()
 
 # 6. Calculate and print the total gamma power (30–80 Hz)
 gamma_mask = (freqs_pos >= 30) & (freqs_pos <= 80)
 gamma_power = np.sum(power[gamma_mask])
 print("Total gamma power (30–80 Hz):", gamma_power)
 
+def run_network_once(c4, n=1000, dt=0.1, time=1000):
+    # 1. Create neurons
+    e_cell = [Excitatory_neuron() for _ in range(n)]
+    i_cell = [inhibitory_neuron() for _ in range(n)]
+
+    # 2. Connect neurons
+    e_to_i, i_to_e, e_to_e, i_to_i = [], [], [], []
+
+    for i in range(n):
+        ei_probability = random.uniform(0.45, 0.5)
+        ie_probability = random.uniform(0.4, 0.6)
+
+        if random.random() < ei_probability:
+            nc_ei = h.NetCon(e_cell[i].soma(0.5)._ref_v, i_cell[i].syn, sec=e_cell[i].soma)
+            nc_ei.threshold = 0
+            nc_ei.delay = random.normalvariate(3.5, 0.581)
+            nc_ei.weight[0] = 0.25
+            e_cell[i].syn.tau = 3 * ms
+            e_to_i.append(nc_ei)
+
+        if random.random() < ie_probability:
+            e_cell[i].inh_syn = h.ExpSyn(e_cell[i].soma(0.5))
+            e_cell[i].inh_syn.tau = 9 * ms
+            e_cell[i].inh_syn.e = -75
+            nc_ie = h.NetCon(i_cell[i].soma(0.5)._ref_v, e_cell[i].inh_syn, sec=i_cell[i].soma)
+            nc_ie.threshold = 0
+            nc_ie.delay = random.normalvariate(9.5, 0.97)
+            nc_ie.weight[0] = 0.25
+            i_to_e.append(nc_ie)
+
+    for pre_idx in range(n):
+        ee_probability = random.uniform(0.06, 0.1)
+        for post_idx in range(n):
+            if pre_idx == post_idx:
+                continue
+            if random.random() < ee_probability:
+                nc = h.NetCon(e_cell[pre_idx].soma(0.5)._ref_v, e_cell[post_idx].syn, sec=e_cell[pre_idx].soma)
+                nc.threshold = 0
+                nc.delay = random.normalvariate(3.5, 0.581)
+                nc.weight[0] = 0.25
+                e_cell[pre_idx].syn.tau = 3 * ms
+                e_to_e.append(nc)
+
+    for pre_idx in range(n):
+        ii_probability = random.uniform(0.3, 0.4)
+        for post_idx in range(n):
+            if pre_idx == post_idx:
+                continue
+            if random.random() < ii_probability:
+                i_cell[post_idx].inh_syn = h.ExpSyn(i_cell[post_idx].soma(0.5))
+                i_cell[post_idx].inh_syn.tau = 9 * ms
+                i_cell[post_idx].inh_syn.e = -75
+                nc = h.NetCon(i_cell[pre_idx].soma(0.5)._ref_v, i_cell[post_idx].inh_syn, sec=i_cell[pre_idx].soma)
+                nc.threshold = 0
+                nc.delay = random.normalvariate(9.5, 0.97)
+                nc.weight[0] = 0.25
+                i_to_i.append(nc)
+
+    # 3. Apply C4-dependent synapse pruning
+    percent_remove = (((100) / (1 + (math.e ** (-0.05555556 * (c4 - 45))))) / 100)
+    percent_remove_inhibitory = percent_remove / 4
+    e_to_i = remove_synapse(e_to_i, percent_remove)
+    i_to_e = remove_synapse(i_to_e, percent_remove_inhibitory)
+    e_to_e = remove_synapse(e_to_e, percent_remove)
+    i_to_i = remove_synapse(i_to_i, percent_remove_inhibitory)
+
+    # 4. Inject noise
+    for i in range(n):
+        stim = h.IClamp(e_cell[i].soma(0.5))
+        stim.delay = 0
+        stim.dur = time
+        stim.amp = 0.5
+
+    # 5. Record data
+    t_vec = h.Vector().record(h._ref_t)
+    v_e = [h.Vector().record(cell.soma(0.5)._ref_v) for cell in e_cell]
+
+    # 6. Run simulation
+    h.finitialize(-65)
+    h.continuerun(time)
+
+    # 7. LFP
+    v_e_mat = np.array([np.array(vec) for vec in v_e])
+    lfp = np.mean(v_e_mat, axis=0)
+
+    # 8. Power spectrum
+    start_idx = int(50 / dt)
+    lfp_valid = lfp[start_idx:]
+    lfp_valid -= np.mean(lfp_valid)
+    lfp_fft = np.fft.fft(lfp_valid)
+    freqs = np.fft.fftfreq(len(lfp_valid), d=dt/1000)
+    pos_mask = freqs > 0
+    freqs_pos = freqs[pos_mask]
+    power = np.square(np.abs(lfp_fft[pos_mask]))
+
+    return np.array(t_vec), lfp, freqs_pos, power
+
 n_runs = 5
 all_lfps = []
 all_powers = []
 
-for run_idx in range(n_runs):
-    print(f"Running simulation {run_idx + 1}/{n_runs}...")
-    
-    # Re-run the simulation
-    h.finitialize(-65)
-    h.continuerun(time)
-
-    # Convert soma voltages to NumPy array
-    v_e_mat = np.array([np.array(vec) for vec in v_e])
-    lfp = np.mean(v_e_mat, axis=0)
+for i in range(n_runs):
+    print(f"Running simulation {i + 1}/{n_runs}")
+    t_vec, lfp, freqs_pos, power = run_network_once(c4)
     all_lfps.append(lfp)
-
-    # --- Fourier / Power Spectrum ---
-    transient_ms = 50
-    start_idx = int(transient_ms / dt)
-    lfp_valid = lfp[start_idx:]
-    lfp_valid -= np.mean(lfp_valid)
-
-    lfp_fft = np.fft.fft(lfp_valid)
-    freqs = np.fft.fftfreq(len(lfp_valid), d=dt / 1000)
-    pos_mask = freqs > 0
-    freqs_pos = freqs[pos_mask]
-    power = np.square(np.abs(lfp_fft[pos_mask]))
     all_powers.append(power)
 
-# Average LFP
+# Compute averages
 avg_lfp = np.mean(all_lfps, axis=0)
+avg_power = np.mean(all_powers, axis=0)
 
-# Plot averaged LFP
+# Plot average LFP
 plt.figure(figsize=(10,4))
-plt.plot(t_vec, avg_lfp, color='black', linewidth=2)
-plt.xlabel('Time (ms)')
-plt.ylabel('Avg. Simulated LFP (mV)')
-plt.title(f'Average LFP over {n_runs} Runs')
+plt.plot(t_vec, avg_lfp, color='black')
+plt.xlabel("Time (ms)")
+plt.ylabel("Average LFP (mV)")
+plt.title(f"Avg. LFP over {n_runs} runs")
 plt.tight_layout()
 plt.show()
 
-# Average power spectrum
-avg_power = np.mean(all_powers, axis=0)
-
-# Plot averaged power spectrum
+# Plot average power spectrum
 plt.figure(figsize=(10,4))
 plt.plot(freqs_pos, avg_power, color='purple')
 plt.xlim(0, 100)
-plt.xlabel('Frequency (Hz)')
-plt.ylabel('Avg. Power (a.u.)')
-plt.title(f'Average LFP Power Spectrum over {n_runs} Runs')
+plt.xlabel("Frequency (Hz)")
+plt.ylabel("Avg. Power (a.u.)")
+plt.title(f"Avg. Power Spectrum over {n_runs} runs")
 plt.tight_layout()
 plt.show()
 
-# Total gamma power (30–80 Hz)
+# Gamma power
 gamma_mask = (freqs_pos >= 30) & (freqs_pos <= 80)
 gamma_power_avg = np.sum(avg_power[gamma_mask])
 print(f"Average gamma power (30–80 Hz) over {n_runs} runs:", gamma_power_avg)
