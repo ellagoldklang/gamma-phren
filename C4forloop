@@ -1,0 +1,222 @@
+from neuron import h
+from neuron.units import ms, mV
+h.load_file('stdrun.hoc')
+import random
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+
+def run_simulation(c4=20, seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+        random.seed(seed)
+
+    class Cell():
+        def __init__(self):
+            self._setup_morphology()
+            self.all = self.soma.wholetree()
+            self.all2 = self.dend.wholetree()
+            self._setup_biophysics()
+
+    class Excitatory_neuron(Cell):
+        name = 'ExcitatoryNeuron'
+
+        def _setup_morphology(self):
+            self.soma = h.Section(name='soma')
+            self.soma.L = 30
+            self.soma.diam = 30
+            self.soma.nseg = 1
+            self.soma.insert('extracellular')
+
+            self.dend = h.Section(name='dend')
+            self.dend.L = 500
+            self.dend.diam = 1
+            self.dend.nseg = 21
+            self.dend.insert('extracellular')
+            self.dend.connect(self.soma(1))
+
+        def _setup_biophysics(self):
+            for sec in self.all:
+                sec.cm = 1
+                sec.Ra = 150
+            for sec in self.all2:
+                sec.cm = 1
+                sec.Ra = 150
+
+            self.soma.insert('hh')
+            for seg in self.soma:
+                seg.hh.gnabar = 0.1
+                seg.hh.gkbar = 0.02
+                seg.hh.gl = 0.0003
+                seg.hh.el = -67
+
+            self.dend.insert('pas')
+            for seg in self.dend:
+                seg.pas.g = 0.001
+                seg.pas.e = -67
+
+            self.syn = h.ExpSyn(self.dend(0.5))
+
+    class inhibitory_neuron(Cell):
+        name = 'InhibitoryNeuron'
+
+        def _setup_morphology(self):
+            self.soma = h.Section(name='soma_inhibit')
+            self.soma.L = 20
+            self.soma.diam = 10
+            self.soma.nseg = 1
+            self.soma.insert('extracellular')
+
+            self.dend = h.Section(name='dend_inhibit')
+            self.dend.L = 300
+            self.dend.diam = 1
+            self.dend.nseg = 5
+            self.dend.insert('extracellular')
+            self.dend.connect(self.soma(1))
+
+        def _setup_biophysics(self):
+            for sec in self.all:
+                sec.cm = 1
+                sec.Ra = 100
+            for sec in self.all2:
+                sec.cm = 1
+                sec.Ra = 150
+
+            self.soma.insert('hh')
+            for seg in self.soma:
+                seg.hh.gnabar = 0.035
+                seg.hh.gkbar = 0.009
+                seg.hh.gl = 0.0001
+                seg.hh.el = -67
+
+            self.dend.insert('pas')
+            for seg in self.dend:
+                seg.pas.g = 0.0001
+                seg.pas.e = -65
+
+            self.syn = h.ExpSyn(self.dend(0.5))
+
+    def remove_synapse(conn_list, percent):
+        n_remove = int(len(conn_list) * percent)
+        if n_remove == 0:
+            return conn_list
+        remove_indices = set(random.sample(range(len(conn_list)), n_remove))
+        return [conn for idx, conn in enumerate(conn_list) if idx not in remove_indices]
+
+    n = 100
+    dt = 0.1
+    time = 1000
+    nt = int(time / dt)
+    t_points = np.arange(0, time, dt)
+
+    e_cell = [Excitatory_neuron() for _ in range(n)]
+    i_cell = [inhibitory_neuron() for _ in range(n)]
+
+    e_to_i = []
+    i_to_e = []
+
+    for i in range(n):
+        ei_probability = random.uniform(0.45, 0.5)
+        ie_probability = random.uniform(0.4, 0.6)
+
+        if random.random() < ei_probability:
+            nc_ei = h.NetCon(e_cell[i].soma(0.5)._ref_v, i_cell[i].syn, sec=e_cell[i].soma)
+            nc_ei.threshold = 0
+            nc_ei.delay = random.normalvariate(3.5, 0.581)
+            nc_ei.weight[0] = 0.25
+            e_cell[i].syn.tau = 3 * ms
+            e_to_i.append(nc_ei)
+
+        if random.random() < ie_probability:
+            e_cell[i].inh_syn = h.ExpSyn(e_cell[i].soma(0.5))
+            e_cell[i].inh_syn.tau = 9 * ms
+            e_cell[i].inh_syn.e = -75
+            nc_ie = h.NetCon(i_cell[i].soma(0.5)._ref_v, e_cell[i].inh_syn, sec=i_cell[i].soma)
+            nc_ie.threshold = 0
+            nc_ie.delay = random.normalvariate(9.5, 0.97)
+            nc_ie.weight[0] = 0.25
+            i_to_e.append(nc_ie)
+
+    e_to_e = []
+    for pre_idx in range(n):
+        ee_probability = random.uniform(0.06, 0.1)
+        for post_idx in range(n):
+            if pre_idx == post_idx:
+                continue
+            if random.random() < ee_probability:
+                nc = h.NetCon(e_cell[pre_idx].soma(0.5)._ref_v, e_cell[post_idx].syn, sec=e_cell[pre_idx].soma)
+                nc.threshold = 0
+                nc.delay = random.normalvariate(3.5, 0.581)
+                nc.weight[0] = 0.25
+                e_cell[pre_idx].syn.tau = 3 * ms
+                e_to_e.append(nc)
+
+    i_to_i = []
+    for pre_idx in range(n):
+        ii_probability = random.uniform(0.3, 0.4)
+        for post_idx in range(n):
+            if pre_idx == post_idx:
+                continue
+            if random.random() < ii_probability:
+                i_cell[post_idx].inh_syn = h.ExpSyn(i_cell[post_idx].soma(0.5))
+                i_cell[post_idx].inh_syn.tau = 9 * ms
+                i_cell[post_idx].inh_syn.e = -75
+                nc_ie = h.NetCon(i_cell[pre_idx].soma(0.5)._ref_v, i_cell[post_idx].inh_syn, sec=i_cell[pre_idx].soma)
+                nc_ie.threshold = 0
+                nc_ie.delay = random.normalvariate(9.5, 0.97)
+                nc_ie.weight[0] = 0.25
+                i_to_i.append(nc_ie)
+
+    percent_remove = (((100) / (1 + (math.e ** (-0.05555556 * (c4 - 45))))) / 100)
+    percent_remove_inhibitory = percent_remove / 4
+
+    e_to_i = remove_synapse(e_to_i, percent_remove)
+    i_to_e = remove_synapse(i_to_e, percent_remove_inhibitory)
+    e_to_e = remove_synapse(e_to_e, percent_remove)
+    i_to_i = remove_synapse(i_to_i, percent_remove_inhibitory)
+
+    baseline = 0.5
+    noise_strength = 0.1
+    e_noise = []
+
+    for i in range(n):
+        stim = h.IClamp(e_cell[i].soma(0.5))
+        stim.delay = 0
+        stim.dur = time
+        stim.amp = baseline
+        e_noise.append(stim)
+
+    t_vec = h.Vector().record(h._ref_t)
+    v_e = [h.Vector().record(cell.soma(0.5)._ref_v) for cell in e_cell]
+    v_i = [h.Vector().record(cell.soma(0.5)._ref_v) for cell in i_cell]
+
+    h.finitialize(-65)
+    h.continuerun(time)
+
+    v_e_mat = np.array([np.array(vec) for vec in v_e])
+    lfp = np.mean(v_e_mat, axis=0)
+
+    return lfp, t_vec
+
+# Now loop over C4 values from 15 to 105 step 15, run 5 repeats each, average and plot
+
+c4_values = np.arange(15, 106, 15)
+num_runs = 5
+
+plt.figure(figsize=(12, 8))
+
+for c4_val in c4_values:
+    print(f"Running simulations for C4 = {c4_val}")
+    lfp_runs = []
+    for run in range(num_runs):
+        lfp, t_vec = run_simulation(c4=c4_val, seed=run)
+        lfp_runs.append(lfp)
+    avg_lfp = np.mean(lfp_runs, axis=0)
+    plt.plot(t_vec, avg_lfp, label=f'C4={c4_val}')
+
+plt.xlabel('Time (ms)')
+plt.ylabel('Average LFP (mV)')
+plt.title('Average LFP Across C4 Levels')
+plt.legend()
+plt.tight_layout()
+plt.show()
