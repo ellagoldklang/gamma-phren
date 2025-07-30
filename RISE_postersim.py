@@ -131,8 +131,8 @@ def run_simulation(seed=None):
         remove_indices = set(random.sample(range(len(conn_list)), n_remove))
         return [conn for idx, conn in enumerate(conn_list) if idx not in remove_indices]
 
-    n = 100 # number of pairs
-    c4 = 20  # concentration of c4 protein in mg/dL
+    n = 250 # number of pairs
+    c4 = 45  # concentration of c4 protein in mg/dL
 
 
     # n = round(sigmoid * number)
@@ -300,51 +300,35 @@ plt.show()
 
 
 
+# --- Fourier/Powerspectrum Analysis of Simulated LFP ---
 
-# # --- Fourier/Powerspectrum Analysis of Simulated LFP ---
+# 1. Remove initial transient (e.g., first 50 ms)
+transient_ms = 50
+dt = 0.1 
+start_idx = int(transient_ms / dt)
+lfp_valid = avg_lfp[start_idx:]
 
-# # 1. Remove initial transient (e.g., first 50 ms)
-# transient_ms = 50
-# start_idx = int(transient_ms / dt)
-# lfp_valid = lfp[start_idx:]
+# 2. Remove DC offset (mean subtraction)
+lfp_valid = lfp_valid - np.mean(lfp_valid)
 
-# # 2. Remove DC offset (mean subtraction)
-# lfp_valid = lfp_valid - np.mean(lfp_valid)
+# 3. FFT
+lfp_fft = np.fft.fft(lfp_valid)
+freqs = np.fft.fftfreq(len(lfp_valid), d=dt/1000)  # dt is in ms; convert to seconds
 
-# # 3. FFT
-# lfp_fft = np.fft.fft(lfp_valid)
-# freqs = np.fft.fftfreq(len(lfp_valid), d=dt/1000)  # dt is in ms; convert to seconds
+# 4. Only use positive frequencies
+pos_mask = freqs > 0
+freqs_pos = freqs[pos_mask]
+power = np.square(np.abs(lfp_fft[pos_mask]))
 
-# # 4. Only use positive frequencies
-# pos_mask = freqs > 0
-# freqs_pos = freqs[pos_mask]
-# power = np.square(np.abs(lfp_fft[pos_mask]))
-
-# # 5. Plot the Power Spectrum (focus on 0–100 Hz)
-# plt.figure(figsize=(10,4))
-# plt.plot(freqs_pos, power, color='purple')
-# plt.xlim(0, 100)  # adjust if you want to see a different range
-# plt.xlabel('Frequency (Hz)')
-# plt.ylabel('Power (a.u.)')
-# plt.title('LFP Power Spectrum (Fourier Analysis)')
-# plt.tight_layout()
-# plt.show()
-
-# # 6. Calculate and print the total gamma power (30–80 Hz)
-# gamma_mask = (freqs_pos >= 30) & (freqs_pos <= 80)
-# gamma_power = np.sum(power[gamma_mask])
-# print("Total gamma power (30–80 Hz):", gamma_power)
-
-# # Optional: Report peak frequency in gamma band
-# if np.any(gamma_mask):
-#     peak_idx = np.argmax(power[gamma_mask])
-#     peak_freq = freqs_pos[gamma_mask][peak_idx]
-#     print("Peak gamma frequency:", peak_freq, "Hz")
-
-#     ###RUN WITH 5 CONDITIONS
-#     ###RUN EACH CONDITION 5 TIMES
-#     ###AVERAGE OUT THE CONDITIONS 
-#     ###USE ANOVA TEST FOR STATISITICAL MEAUSRE
+# 5. Plot the Power Spectrum (focus on 0–100 Hz)
+plt.figure(figsize=(10,4))
+plt.plot(freqs_pos, power, color='purple')
+plt.xlim(0, 150)  # adjust if you want to see a different range
+plt.xlabel('Frequency (Hz)')
+plt.ylabel('Power (a.u.)')
+plt.title('LFP Power Spectrum (Fourier Analysis)')
+plt.tight_layout()
+plt.show()
 
 
 
