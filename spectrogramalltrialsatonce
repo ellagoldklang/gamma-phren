@@ -287,22 +287,29 @@ for c4 in c4_levels:
     for run in range(num_runs):
         print(f"  Simulation {run+1}/{num_runs}")
         lfp, t_vec = run_simulation()
-        lfp = lfp[int(50/dt):]         # Remove first 50 ms
-        t_vec = t_vec[int(50/dt):]     # Adjust time vector accordingly
+
+        # Trim first 50 ms
+        lfp = lfp[int(50/dt):]
+        t_vec = np.array(t_vec)[int(50/dt):]
+
         lfp_all.append(lfp)
 
-    lfp_all = np.array(lfp_all)
+    # Make all trials the same length
+    min_len = min(len(trial) for trial in lfp_all)
+    lfp_all = np.array([trial[:min_len] for trial in lfp_all])
+    t_vec = t_vec[:min_len]
+
+    # Compute average
     avg_lfp = np.mean(lfp_all, axis=0)
 
-
-    # ---- Plot average LFP for this C4 ----
-    plt.figure(figsize=(10, 4))
-    plt.plot(t_vec, avg_lfp, color='red', linewidth=2, label='Average LFP')
+    # Plot: 5 thin trial lines + 1 bold average
+    plt.figure(figsize=(10,4))
     for i in range(num_runs):
         plt.plot(t_vec, lfp_all[i], alpha=0.3, label=f'Trial {i+1}')
+    plt.plot(t_vec, avg_lfp, color='black', linewidth=2, label='Mean LFP')
     plt.xlabel('Time (ms)')
     plt.ylabel('LFP (mV)')
-    plt.title(f'Average LFP for C4 = {c4} mg/dL')
+    plt.title(f'C4 = {c4} mg/dL')
     plt.legend()
     plt.tight_layout()
     plt.show()
