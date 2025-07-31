@@ -7,6 +7,7 @@ import math
 import matplotlib.pyplot as plt
 import time 
 from scipy.signal import butter, filtfilt, hilbert
+dt = .1
 
 
 start = time.time()
@@ -276,7 +277,6 @@ def run_simulation():
 n = 50  # number of neuron pairs
 num_runs = 5  # number of trials per C4 level
 c4_levels = [15, 30, 45, 60, 75, 90, 105]  # your specified C4 concentrations
-dt = .1
 
 lfp_all_dict = {}  # store results per C4 level
 
@@ -287,29 +287,21 @@ for c4 in c4_levels:
     for run in range(num_runs):
         print(f"  Simulation {run+1}/{num_runs}")
         lfp, t_vec = run_simulation()
-
-        # Trim first 50 ms
-        lfp = lfp[int(50/dt):]
-        t_vec = np.array(t_vec)[int(50/dt):]
-
         lfp_all.append(lfp)
 
-    # Make all trials the same length
-    min_len = min(len(trial) for trial in lfp_all)
-    lfp_all = np.array([trial[:min_len] for trial in lfp_all])
-    t_vec = t_vec[:min_len]
-
-    # Compute average
+    lfp_all = np.array(lfp_all)
     avg_lfp = np.mean(lfp_all, axis=0)
+    lfp_all_dict[c4] = lfp_all
 
-    # Plot: 5 thin trial lines + 1 bold average
-    plt.figure(figsize=(10,4))
+
+    # ---- Plot average LFP for this C4 ----
+    plt.figure(figsize=(10, 4))
+    plt.plot(t_vec, avg_lfp, color='red', linewidth=2, label='Average LFP')
     for i in range(num_runs):
         plt.plot(t_vec, lfp_all[i], alpha=0.3, label=f'Trial {i+1}')
-    plt.plot(t_vec, avg_lfp, color='black', linewidth=2, label='Mean LFP')
     plt.xlabel('Time (ms)')
     plt.ylabel('LFP (mV)')
-    plt.title(f'C4 = {c4} mg/dL')
+    plt.title(f'Average LFP for C4 = {c4} mg/dL')
     plt.legend()
     plt.tight_layout()
     plt.show()
