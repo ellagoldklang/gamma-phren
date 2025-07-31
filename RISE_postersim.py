@@ -4,13 +4,14 @@ h.load_file('stdrun.hoc')
 import random
 import numpy as np
 import math
-from fractions import Fraction
 import matplotlib.pyplot as plt
+import time 
+from scipy.signal import butter, filtfilt, hilbert
 
-def run_simulation(seed=None):
-    if seed is not None:
-        np.random.seed(seed)
-        random.seed(seed)
+
+start = time.time()
+
+def run_simulation():
 
     class Cell():
         def __init__(self):
@@ -130,9 +131,6 @@ def run_simulation(seed=None):
             return conn_list
         remove_indices = set(random.sample(range(len(conn_list)), n_remove))
         return [conn for idx, conn in enumerate(conn_list) if idx not in remove_indices]
-
-    n = 250 # number of pairs
-    c4 = 45  # concentration of c4 protein in mg/dL
 
 
     # n = round(sigmoid * number)
@@ -274,12 +272,17 @@ def run_simulation(seed=None):
 
     return lfp, t_vec
 
+
+n = 50 # number of pairs
+c4 = 20
+
+
 num_runs = 5
 lfp_all = []
 
 for run in range(num_runs):
-    print(f"Running simulation {run+1}/{num_runs}")
-    lfp, t_vec = run_simulation(seed=run)
+    print(f"Running simulation {run+1}/{num_runs} with C4 = {c4} mg/dL")
+    lfp, t_vec = run_simulation()
     lfp_all.append(lfp)
 
 lfp_all = np.array(lfp_all)  # shape (num_runs, n_timepoints)
@@ -290,6 +293,8 @@ avg_lfp = np.mean(lfp_all, axis=0)
 # Plot LFP
 plt.figure(figsize=(10,4))
 plt.plot(t_vec, avg_lfp, color='red', linewidth=2, label='Average LFP')
+for i in range(num_runs):
+    plt.plot(t_vec, lfp_all[i], alpha=0.3, label=f'Trial {i+1}')
 plt.xlabel('Time (ms)')
 plt.ylabel('Average LFP (mV)')
 plt.title('Average LFP Across 5 Runs')
@@ -331,6 +336,39 @@ plt.tight_layout()
 plt.show()
 
 
+# Average amplitude code - dont touch this lowk
+
+dt = 0.1  # ms
+fs = 1000 / dt  # Hz (since dt is in ms)
+
+# Bandpass filter
+def bandpass_filter(data, lowcut, highcut, fs, order=4):
+    nyq = 0.5 * fs
+    b, a = butter(order, [lowcut/nyq, highcut/nyq], btype='band')
+    return filtfilt(b, a, data)
+
+# Sampling rate
+
+lfp_gamma = bandpass_filter(avg_lfp, 30, 80, fs)
+
+
+# Compute amplitude envelope using Hilbert transform
+analytic_signal = hilbert(lfp_gamma)
+amplitude_envelope = np.abs(analytic_signal)
+average_amplitude = np.mean(amplitude_envelope)
+print(f"Average gamma amplitude: {average_amplitude:.4f} mV")
+
+
+plt.figure(figsize=(10,4))
+plt.plot(np.arange(len(lfp)) * dt, lfp_gamma, label='Gamma-filtered LFP')
+plt.plot(np.arange(len(lfp)) * dt, amplitude_envelope, label='Amplitude Envelope', alpha=0.7)
+plt.xlabel('Time (ms)')
+plt.ylabel('Amplitude (mV)')
+plt.title('Gamma Band LFP and Amplitude Envelope')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
 
 
 
@@ -360,3 +398,7 @@ plt.show()
 # plt.legend()
 # plt.tight_layout()
 # plt.show()
+
+
+end = time.time()
+print(f"Elapsed time: {end - start:.4f} seconds")
