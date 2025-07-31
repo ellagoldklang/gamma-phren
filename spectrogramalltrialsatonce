@@ -275,7 +275,7 @@ def run_simulation():
 
 n = 50  # number of neuron pairs
 num_runs = 5  # number of trials per C4 level
-c4_levels = [15, 30, 45, 60, 75, 90]  # your specified C4 concentrations
+c4_levels = [15, 30, 45, 60, 75, 90, 105]  # your specified C4 concentrations
 dt = .1
 
 lfp_all_dict = {}  # store results per C4 level
