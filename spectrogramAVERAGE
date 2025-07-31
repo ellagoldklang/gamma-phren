@@ -274,7 +274,7 @@ def run_simulation():
 
 
 n = 50 # number of pairs
-c4 = 20
+c4 = 15 #manually input C4 levels 15, 30, 45, 60, 75, 90, 105
 
 
 num_runs = 5
