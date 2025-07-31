@@ -6,7 +6,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import time 
-from scipy.signal import butter, filtfilt, hilbert
+from scipy.signal import butter, filtfilt, hilbert, spectrogram
 
 
 start = time.time()
@@ -273,63 +273,35 @@ def run_simulation():
     return lfp, t_vec
 
 
-n = 50  # number of neuron pairs
-num_runs = 5  # number of trials per C4 level
-c4_levels = [15, 30, 45, 60, 75, 90, 105]  # your specified C4 concentrations
-dt = .1
-
-lfp_all_dict = {}  # store results per C4 level
-
-for c4 in c4_levels:
-    lfp_all = []
-    print(f"\nRunning simulations for C4 = {c4} mg/dL")
-
-    for run in range(num_runs):
-        print(f"  Simulation {run+1}/{num_runs}")
-        lfp, t_vec = run_simulation()
-        lfp_all.append(lfp)
-
-    lfp_all = np.array(lfp_all)
-    avg_lfp = np.mean(lfp_all, axis=0)
-    lfp_all_dict[c4] = lfp_all
+n = 50 # number of pairs
+c4 = 20
 
 
-    # ---- Plot average LFP for this C4 ----
-    plt.figure(figsize=(10, 4))
-    plt.plot(t_vec, avg_lfp, color='red', linewidth=2, label='Average LFP')
-    for i in range(num_runs):
-        plt.plot(t_vec, lfp_all[i], alpha=0.3, label=f'Trial {i+1}')
-    plt.xlabel('Time (ms)')
-    plt.ylabel('LFP (mV)')
-    plt.title(f'Average LFP for C4 = {c4} mg/dL')
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+num_runs = 5
+lfp_all = []
 
-    # ---- Spectrograms for each trial ----
-    from scipy.signal import spectrogram
-    plt.figure(figsize=(15, 10))
-    for i in range(num_runs):
-        lfp_valid = lfp_all[i][int(50/dt):]  # remove 50 ms transient
-        f_spec, t_spec, Sxx = spectrogram(lfp_valid, fs=1000/dt, nperseg=256, noverlap=128)
-        plt.subplot(3, 2, i+1)
-        plt.pcolormesh(t_spec + 50, f_spec, Sxx, shading='gouraud')
-        plt.ylim(0, 100)
-        plt.xlabel('Time (ms)')
-        plt.ylabel('Frequency (Hz)')
-        plt.title(f'Spectrogram Trial {i+1} (C4={c4})')
-    plt.suptitle(f'Spectrograms (C4 = {c4} mg/dL)', fontsize=16, y=1.02)
-    plt.tight_layout()
-    plt.show()
+for run in range(num_runs):
+    print(f"Running simulation {run+1}/{num_runs} with C4 = {c4} mg/dL")
+    lfp, t_vec = run_simulation()
+    lfp_all.append(lfp)
 
+lfp_all = np.array(lfp_all)  # shape (num_runs, n_timepoints)
+avg_lfp = np.mean(lfp_all, axis=0)
+
+transient_ms = 50
+dt = 0.1 
+start_idx = int(transient_ms / dt)
+lfp_valid = avg_lfp[start_idx:]
+lfp_all_valid = lfp_all[:, start_idx:]
+t_vec_valid = np.array(t_vec)[start_idx:]
 
 
 
 # Plot LFP
 plt.figure(figsize=(10,4))
-plt.plot(t_vec, avg_lfp, color='red', linewidth=2, label='Average LFP')
+plt.plot(t_vec_valid, lfp_valid, color='red', linewidth=2, label='Average LFP')
 for i in range(num_runs):
-    plt.plot(t_vec, lfp_all[i], alpha=0.3, label=f'Trial {i+1}')
+    plt.plot(t_vec_valid, lfp_all_valid[i], alpha=0.3, label=f'Trial {i+1}')
 plt.xlabel('Time (ms)')
 plt.ylabel('Average LFP (mV)')
 plt.title('Average LFP Across 5 Runs')
@@ -343,31 +315,6 @@ plt.show()
 # --- Fourier/Powerspectrum Analysis of Simulated LFP ---
 
 # 1. Remove initial transient (e.g., first 50 ms)
-transient_ms = 50
-dt = 0.1 
-start_idx = int(transient_ms / dt)
-lfp_valid = avg_lfp[start_idx:]
-
-from scipy.signal import spectrogram
-
-# Plot spectrogram for each trial
-plt.figure(figsize=(15, 10))  # Adjust size as needed
-for i in range(num_runs):
-    lfp_valid = lfp_all[i][int(50/dt):]  # Remove first 50 ms
-    f_spec, t_spec, Sxx = spectrogram(lfp_valid, fs=1000/dt, nperseg=256, noverlap=128)
-
-    plt.subplot(3, 2, i+1)
-    plt.pcolormesh(t_spec + 50, f_spec, Sxx, shading='gouraud')
-    plt.ylim(0, 100)
-    plt.xlabel('Time (ms)')
-    plt.ylabel('Frequency (Hz)')
-    plt.title(f'Spectrogram Trial {i+1}')
-    plt.tight_layout()
-
-plt.suptitle(f'Spectrograms of 5 Trials (C4 = {c4} mg/dL)', fontsize=16, y=1.02)
-plt.tight_layout()
-plt.show()
-
 
 # 2. Remove DC offset (mean subtraction)
 lfp_valid = lfp_valid - np.mean(lfp_valid)
@@ -382,18 +329,12 @@ freqs_pos = freqs[pos_mask]
 power = np.square(np.abs(lfp_fft[pos_mask]))
 
 # 5. Plot the Power Spectrum (focus on 0–100 Hz)
-for c4 in c4_levels:
-    lfp_all = np.array(lfp_all_dict[c4])
-    avg_lfp = np.mean(lfp_all, axis=0)
-
-    plt.figure(figsize=(10, 4))
-plt.plot(t_vec, avg_lfp, color='red', linewidth=2, label='Average LFP')
-for i in range(num_runs):
-    plt.plot(t_vec, lfp_all[i], alpha=0.3, label=f'Trial {i+1}')
-plt.xlabel('Time (ms)')
-plt.ylabel('Average LFP (mV)')
-plt.title(f'Average LFP Across 5 Runs (C4 = {c4} mg/dL)')
-plt.legend()
+plt.figure(figsize=(10,4))
+plt.plot(freqs_pos, power, color='purple')
+plt.xlim(0, 150)  # adjust if you want to see a different range
+plt.xlabel('Frequency (Hz)')
+plt.ylabel('Power (a.u.)')
+plt.title('LFP Power Spectrum (Fourier Analysis)')
 plt.tight_layout()
 plt.show()
 
@@ -411,7 +352,7 @@ def bandpass_filter(data, lowcut, highcut, fs, order=4):
 
 # Sampling rate
 
-lfp_gamma = bandpass_filter(avg_lfp, 30, 80, fs)
+lfp_gamma = bandpass_filter(lfp_valid, 30, 80, fs)
 
 
 # Compute amplitude envelope using Hilbert transform
@@ -422,8 +363,8 @@ print(f"Average gamma amplitude: {average_amplitude:.4f} mV")
 
 
 plt.figure(figsize=(10,4))
-plt.plot(np.arange(len(lfp)) * dt, lfp_gamma, label='Gamma-filtered LFP')
-plt.plot(np.arange(len(lfp)) * dt, amplitude_envelope, label='Amplitude Envelope', alpha=0.7)
+plt.plot(t_vec_valid * dt, lfp_gamma, label='Gamma-filtered LFP')
+plt.plot(t_vec_valid * dt, amplitude_envelope, label='Amplitude Envelope', alpha=0.7)
 plt.xlabel('Time (ms)')
 plt.ylabel('Amplitude (mV)')
 plt.title('Gamma Band LFP and Amplitude Envelope')
@@ -431,47 +372,19 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
-# === GAMMA AMPLITUDE OVER TIME FOR EACH C4 LEVEL ===
 
-import matplotlib.cm as cm
+# Spectogram
 
-dt = 0.1  # ms
-fs = 1000 / dt  # Hz
-
-def bandpass_filter(data, lowcut, highcut, fs, order=4):
-    nyq = 0.5 * fs
-    b, a = butter(order, [lowcut / nyq, highcut / nyq], btype='band')
-    return filtfilt(b, a, data)
-
-# Choose a colormap and normalize C4 levels to colors
-c4_levels_sorted = sorted(lfp_all_dict.keys())
-colors = cm.viridis(np.linspace(0, 1, len(c4_levels_sorted)))
-
-plt.figure(figsize=(12, 5))
-
-for idx, c4 in enumerate(c4_levels_sorted):
-    lfp_trials = np.array(lfp_all_dict[c4])  # shape: (num_trials, timepoints)
-    avg_lfp = np.mean(lfp_trials, axis=0)
-    
-    # Trim transient
-    lfp_valid = avg_lfp[int(50/dt):]
-    
-    # Gamma filtering
-    gamma = bandpass_filter(lfp_valid, 30, 80, fs)
-    
-    # Envelope using Hilbert transform
-    analytic = hilbert(gamma)
-    envelope = np.abs(analytic)
-    
-    t = np.arange(len(envelope)) * dt + 50  # time axis (shifted by transient)
-    
-    # Plot with color-coded C4
-    plt.plot(t, envelope, label=f'C4 = {c4}', color=colors[idx])
-
-plt.xlabel('Time (ms)')
-plt.ylabel('Gamma Amplitude (mV)')
-plt.title('Gamma Band Amplitude Across C4 Levels')
-plt.legend(title='C4 Concentration')
+plt.figure(figsize=(15, 10))
+for i in range(num_runs):
+    f_spec, t_spec, Sxx = spectrogram(lfp_valid, fs=1000/dt, nperseg=256, noverlap=128)
+    plt.subplot(3, 2, i+1)
+    plt.pcolormesh(t_spec + 50, f_spec, Sxx, shading='gouraud')
+    plt.ylim(0, 100)
+    plt.xlabel('Time (ms)')
+    plt.ylabel('Frequency (Hz)')
+    plt.title(f'Spectrogram Trial {i+1} (C4={c4})')
+plt.suptitle(f'Spectrograms (C4 = {c4} mg/dL)', fontsize=16, y=1.02)
 plt.tight_layout()
 plt.show()
 
