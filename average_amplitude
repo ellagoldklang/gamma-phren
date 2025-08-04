@@ -1,0 +1,24 @@
+import numpy as np
+from scipy.signal import butter, filtfilt, hilbert
+
+
+
+# Bandpass filter
+def bandpass_filter(data, lowcut, highcut, fs, order=4):
+    nyq = 0.5 * fs
+    b, a = butter(order, [lowcut/nyq, highcut/nyq], btype='band')
+    return filtfilt(b, a, data)
+
+dt = 0.1  # ms
+fs = 1000 / dt  # Hz (since dt is in ms)
+
+# Sampling rate
+for i in range(5):
+    lfp_valid = np.loadtxt(f"lfp_individual105_trial{i+1}")
+    lfp_gamma = bandpass_filter(lfp_valid, 30, 80, fs)
+
+
+    analytic_signal = hilbert(lfp_gamma)
+    amplitude_envelope = np.abs(analytic_signal)
+    average_amplitude = np.mean(amplitude_envelope)
+    print(average_amplitude)
