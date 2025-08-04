@@ -361,7 +361,8 @@ for c4 in c4_levels:
 # Plot LFP Averages 
 
 data_lfp = np.loadtxt("lfp_average_trial105")  ## CHANGE TO FILE NAME ##
-
+print(data_lfp)
+print(data_lfp.shape)
 plt.figure(figsize=(10,4))
 plt.plot(t_vec_valid, data_lfp, color='red', linewidth=2, label='Average LFP')
 plt.xlabel('Time (ms)')
@@ -369,11 +370,10 @@ plt.ylabel('Average LFP (mV)')
 plt.title(f'Average LFP Across 5 Trials for 15 mg/dL of C4 levels') ## CHANGE TITLE FOR THE APPROPRIATE C4 LEVELS ##
 plt.legend()
 plt.tight_layout()
-#plt.show()
+plt.show()
 
 #Plot Average Fourier Transform of LFP 
-
-power_data = np.loadtxt("power_avg105")  ## CHANGE TO FILE NAME ##
+power_data = np.loadtxt("power_avg15")  ## CHANGE TO FILE NAME ##
 freqs_data = np.loadtxt("freqs_pos_avg105")
 plt.figure(figsize=(10,4))
 plt.plot(freqs_data, power_data, color='purple')
@@ -384,23 +384,24 @@ plt.title(f'LFP Power Spectrum (Fourier Transform) for 105 mg/dL of C4 levels') 
 plt.tight_layout()
 plt.show()
 
-# Plot Average Spectrogram
+# Plot Average Spectrogram of LFP
+## CHANGE TO FILE NAME ##
 
-data_ssx = np.loadtxt("sxx_avg105")  ## CHANGE TO FILE NAME ##
+
 plt.figure(figsize=(15, 10))
-# f_spec, t_spec, Sxx = spectrogram(data_lfp, fs=1000/dt, nperseg=256, noverlap=128) 
-f_spec, t_spec, Sxx = spectrogram(data_lfp, fs=39000, nperseg=400, noverlap=75) 
+f_spec, t_spec, Sxx = spectrogram(data_lfp, fs=((1000/dt)), nperseg=400, noverlap=100) 
 plt.subplot(3, 2, 1)
-plt.pcolormesh((t_spec * 1000) + 50, f_spec, Sxx, shading='gouraud', cmap="jet",vmin=np.min(Sxx), vmax=(np.max(Sxx)/2.5))
+plt.pcolormesh(t_spec * 1000, f_spec, Sxx, shading='gouraud', cmap="jet",vmin=np.min(Sxx), vmax=(np.max(Sxx)/2.5))
 plt.colorbar(label='Power/Frequency (dB/Hz)')
-plt.ylim(0, 500)
-plt.xlim(0, 1050) 
+plt.ylim(0, 100)
+plt.xlim(0, 1000)  # adjust if you want to see a different range
 plt.xlabel('Time (ms)')
 plt.ylabel('Frequency (Hz)')
-plt.title(f' Average Spectrogram Trial for 105 mg/dL of C4)') ## CHANGE TITLE FOR THE APPROPRIATE C4 LEVELS ##
-plt.suptitle(f'Spectrograms (C4 = {c4} mg/dL)', fontsize=16, y=1.02)
+plt.title(f' Average Spectrogram Trial for 15 mg/dL of C4)') ## CHANGE TITLE FOR THE APPROPRIATE C4 LEVELS ##
+plt.suptitle(f'Spectrograms (C4 = 15 mg/dL)', fontsize=16, y=1.02)
 plt.tight_layout()
 plt.show()
+
 
 
 end = time.time()
