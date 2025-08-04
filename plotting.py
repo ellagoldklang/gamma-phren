@@ -394,7 +394,7 @@ plt.subplot(3, 2, 1)
 plt.pcolormesh((t_spec * 1000) + 50, f_spec, Sxx, shading='gouraud', cmap="jet",vmin=np.min(Sxx), vmax=(np.max(Sxx)/2.5))
 plt.colorbar(label='Power/Frequency (dB/Hz)')
 plt.ylim(0, 500)
-plt.xlim(50, 1050) 
+plt.xlim(0, 1050) 
 plt.xlabel('Time (ms)')
 plt.ylabel('Frequency (Hz)')
 plt.title(f' Average Spectrogram Trial for 105 mg/dL of C4)') ## CHANGE TITLE FOR THE APPROPRIATE C4 LEVELS ##
